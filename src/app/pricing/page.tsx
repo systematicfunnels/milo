@@ -12,6 +12,8 @@ import Link from "next/link";
 import { getTranslation } from "@/lib/i18n";
 import { useLanguage } from "@/hooks/useLanguage";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
+import { SUBSCRIPTION_TIERS } from "@/lib/subscription-tiers";
+import { useLocationCurrency } from "@/hooks/useLocationCurrency";
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
@@ -19,39 +21,12 @@ interface Plan {
   id: string;
   name: string;
   price: number;
+  priceInr?: number;
   priceId: string | null;
-  features: string[];
+  features: readonly string[];
   icon: React.ReactNode;
   popular?: boolean;
 }
-
-const plans: Plan[] = [
-  {
-    id: "free",
-    name: "Free",
-    price: 0,
-    priceId: null,
-    icon: <Sparkles className="w-6 h-6" />,
-    features: ["5 reminders/month", "10 API calls/day", "Basic support", "Single platform"],
-  },
-  {
-    id: "pro",
-    name: "Pro",
-    price: 9.99,
-    priceId: process.env.NEXT_PUBLIC_STRIPE_PRO_PRICE_ID || "",
-    icon: <Crown className="w-6 h-6" />,
-    popular: true,
-    features: ["Unlimited reminders", "100 API calls/day", "Priority support", "All platforms", "Custom bot name"],
-  },
-  {
-    id: "enterprise",
-    name: "Enterprise",
-    price: 29.99,
-    priceId: process.env.NEXT_PUBLIC_STRIPE_ENTERPRISE_PRICE_ID || "",
-    icon: <Building2 className="w-6 h-6" />,
-    features: ["Unlimited reminders", "Unlimited API calls", "Team features", "API access", "24/7 dedicated support", "SLA guarantee"],
-  },
-];
 
 function getAuthToken() {
   if (typeof window === "undefined") return null;
@@ -166,12 +141,43 @@ function CheckoutForm({
 export default function PricingPage() {
   const router = useRouter();
   const { lang, setLang } = useLanguage();
+  const { currency } = useLocationCurrency();
   const t = getTranslation(lang);
   const [isLoading, setIsLoading] = useState(true);
   const [currentTier, setCurrentTier] = useState<string>("free");
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [isCreatingSubscription, setIsCreatingSubscription] = useState(false);
+
+  const plans: Plan[] = [
+    {
+      id: "free",
+      name: SUBSCRIPTION_TIERS.free.name,
+      price: SUBSCRIPTION_TIERS.free.price,
+      priceId: SUBSCRIPTION_TIERS.free.priceId,
+      icon: <Sparkles className="w-6 h-6" />,
+      features: SUBSCRIPTION_TIERS.free.features,
+    },
+    {
+      id: "pro",
+      name: SUBSCRIPTION_TIERS.pro.name,
+      price: SUBSCRIPTION_TIERS.pro.price,
+      priceInr: SUBSCRIPTION_TIERS.pro.priceInr,
+      priceId: SUBSCRIPTION_TIERS.pro.priceId,
+      icon: <Crown className="w-6 h-6" />,
+      popular: true,
+      features: SUBSCRIPTION_TIERS.pro.features,
+    },
+    {
+      id: "enterprise",
+      name: SUBSCRIPTION_TIERS.enterprise.name,
+      price: SUBSCRIPTION_TIERS.enterprise.price,
+      priceInr: SUBSCRIPTION_TIERS.enterprise.priceInr,
+      priceId: SUBSCRIPTION_TIERS.enterprise.priceId,
+      icon: <Building2 className="w-6 h-6" />,
+      features: SUBSCRIPTION_TIERS.enterprise.features,
+    },
+  ];
 
   const fetchSubscription = useCallback(async () => {
     const token = getAuthToken();
@@ -232,7 +238,15 @@ export default function PricingPage() {
         throw new Error(data.error || "Failed to create subscription");
       }
 
-      setClientSecret(data.clientSecret);
+      if (data.clientSecret) {
+        setClientSecret(data.clientSecret);
+      } else if (data.status === "active" || data.status === "trialing") {
+        // If no payment intent but status is active/trialing, it's successful (e.g. $0 plan)
+        toast.success("Subscription activated!");
+        handlePaymentSuccess();
+      } else {
+        throw new Error("No payment required but subscription status unknown");
+      }
     } catch (error) {
       console.error("Error:", error);
       toast.error(error instanceof Error ? error.message : "Failed to start checkout");
@@ -337,8 +351,12 @@ export default function PricingPage() {
                 <div>
                   <h3 className="text-xl font-semibold">{plan.name}</h3>
                   <div className="flex items-baseline gap-1">
-                    <span className="text-3xl font-bold">${plan.price}</span>
-                    {plan.price > 0 && <span className="text-muted-foreground">/month</span>}
+                    <span className="text-3xl font-bold">
+                      {currency === "INR" && plan.priceInr 
+                        ? `₹${plan.priceInr}` 
+                        : `$${plan.price}`}
+                    </span>
+                    {plan.price > 0 && <span className="text-muted-foreground">/{t.pricingPage.month}</span>}
                   </div>
                 </div>
               </div>
@@ -396,7 +414,9 @@ export default function PricingPage() {
                   <div>
                     <h2 className="text-xl font-semibold">{t.pricingPage.subscribeTo} {selectedPlan.name}</h2>
                     <p className="text-sm text-muted-foreground">
-                      ${selectedPlan.price}/month
+                      {currency === "INR" && selectedPlan.priceInr 
+                        ? `₹${selectedPlan.priceInr}` 
+                        : `$${selectedPlan.price}`}/{t.pricingPage.month}
                     </p>
                   </div>
                   <button

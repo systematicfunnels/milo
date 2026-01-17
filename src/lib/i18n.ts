@@ -142,6 +142,7 @@ export const translations = {
       subscribeNow: "Subscribe Now",
       processing: "Processing...",
       cancel: "Cancel",
+      month: "month",
     },
     cta: {
       title: "Ready to never forget again?",
@@ -357,6 +358,7 @@ export const translations = {
       subscribeNow: "अभी सब्सक्राइब करें",
       processing: "प्रोसेस हो रहा है...",
       cancel: "रद्द करें",
+      month: "महीना",
     },
     cta: {
       title: "कभी न भूलने के लिए तैयार हैं?",

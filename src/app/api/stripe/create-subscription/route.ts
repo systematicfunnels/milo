@@ -65,11 +65,41 @@ export async function POST(req: NextRequest) {
       metadata: { userId: user.id },
     });
 
-    const latestInvoice = subscription.latest_invoice as import("stripe").Stripe.Invoice;
-    const paymentIntent = latestInvoice?.payment_intent as import("stripe").Stripe.PaymentIntent;
+    // Properly handle expanded types
+    const latestInvoice = subscription.latest_invoice as any;
+    
+    console.log("Subscription created:", {
+      id: subscription.id,
+      status: subscription.status,
+      latestInvoiceId: typeof subscription.latest_invoice === "string" ? subscription.latest_invoice : subscription.latest_invoice?.id,
+      amountDue: latestInvoice?.amount_due,
+      paymentIntentId: latestInvoice?.payment_intent?.id || latestInvoice?.payment_intent
+    });
 
-    if (!paymentIntent?.client_secret) {
+    if (!latestInvoice || typeof latestInvoice === "string") {
+      console.error("Latest invoice missing or not expanded:", latestInvoice);
+      return NextResponse.json({ error: "Failed to retrieve subscription invoice" }, { status: 500 });
+    }
+
+    const paymentIntent = latestInvoice.payment_intent;
+
+    if (!paymentIntent || typeof paymentIntent === "string") {
+      // If payment intent is missing, it might be a $0 invoice or trial
+      if (latestInvoice.amount_due === 0) {
+        return NextResponse.json({
+          subscriptionId: subscription.id,
+          clientSecret: null, // No payment needed now
+          status: "active"
+        });
+      }
+      
+      console.error("Payment intent missing or not expanded:", paymentIntent);
       return NextResponse.json({ error: "Failed to create payment intent" }, { status: 500 });
+    }
+
+    if (!paymentIntent.client_secret) {
+      console.error("Payment intent missing client secret:", paymentIntent.id);
+      return NextResponse.json({ error: "Payment intent missing client secret" }, { status: 500 });
     }
 
     return NextResponse.json({
@@ -78,6 +108,7 @@ export async function POST(req: NextRequest) {
     });
   } catch (error) {
     console.error("Error creating subscription:", error);
-    return NextResponse.json({ error: "Failed to create subscription" }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : "Failed to create subscription";
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }
