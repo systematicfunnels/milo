@@ -21,6 +21,7 @@ export default function LoginPage() {
   const [otp, setOtp] = useState("");
   const [step, setStep] = useState<"email" | "otp">("email");
   const [isLoading, setIsLoading] = useState(false);
+  const [receivedOtp, setReceivedOtp] = useState<string | null>(null);
 
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,6 +39,9 @@ export default function LoginPage() {
       
       if (res.ok) {
         toast.success(t.login.otpSent);
+        if (data.devOtp) {
+          setReceivedOtp(data.devOtp);
+        }
         setStep("otp");
       } else {
         toast.error(data.error || t.login.otpFailed);
@@ -131,6 +135,17 @@ export default function LoginPage() {
                 </div>
               </div>
 
+              {receivedOtp && (
+                <motion.div 
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="p-4 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-center"
+                >
+                  <p className="text-xs text-indigo-400 uppercase tracking-wider font-semibold mb-1">Your Login Code</p>
+                  <p className="text-2xl font-mono font-bold text-indigo-500 tracking-[0.5em] ml-[0.5em]">{receivedOtp}</p>
+                </motion.div>
+              )}
+
               <Button
                 type="submit"
                 disabled={isLoading || !email}
@@ -189,6 +204,7 @@ export default function LoginPage() {
                 onClick={() => {
                   setStep("email");
                   setOtp("");
+                  setReceivedOtp(null);
                 }}
                 className="w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors"
               >
